@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneFileChatIde</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            height: calc(100vh - 20px);
+            display: flex;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            margin: 10px;
+            border-radius: 5px;
+            gap: 1px;
+        }
+
+        .panel {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-panel {
+            width: 30%;
+        }
+
+        .editor-panel {
+            width: 40%;
+        }
+
+        .chat-panel {
+            width: 30%;
+        }
+
+        .panel-header {
+            height: 3em;
+            background: #1e1e1e;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            font-size: 12px;
+            border-bottom: 1px solid #333;
+        }
+
+        .preview-content, .editor-content {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .preview-content {
+            background: #fff;
+            padding: 0;
+        }
+
+        .preview-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #fff;
+        }
+
+        .chat-config {
+            background: #1e1e1e;
+            border-bottom: 1px solid #333;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            position: absolute;
+            width: calc(30% - 8px);
+            top: 3em;
+        }
+
+        .chat-config label {
+            color: #888;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-config input {
+            width: 100%;
+            height: 1.5em;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: #d4d4d4;
+            padding: 2px 5px;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+
+        .chat-config input:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow: auto;
+            padding: 10px;
+            background: #454545;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            word-wrap: break-word;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .chat-message pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-width: 100%;
+            overflow-x: auto;
+            line-height: 1.5em;
+        }
+
+        .chat-message.loading .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #d4d4d4;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        .chat-message .token-count {
+            display: inline-block;
+            margin: 0 8px;
+            font-size: 11px;
+            color: #888;
+            vertical-align: middle;
+        }
+
+        .chat-message .loading-spinner.completed {
+            border: 2px solid #fff;
+            animation: none;
+            height: 16px;
+            width: 16px;
+            display: inline-block;
+            border-radius: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .download-btn {
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            padding: 4px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .download-btn:hover {
+            background: #0055aa;
+        }
+
+        .download-btn:active {
+            background: #004499;
+        }
+
+        .maximize-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+            color:white;
+            width: 18px;
+            height: 18px;
+        }
+
+        .maximize-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .maximize-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .chat-message.user {
+            background: #0066cc;
+            color: #fff;
+            margin-left: 20px;
+        }
+
+        .chat-message.ai {
+            background: #2d2d2d;
+            color: #d4d4d4;
+            margin-right: 20px;
+        }
+
+        .chat-message.error {
+            background: #cc0000;
+            color: #fff;
+        }
+
+        .chat-input {
+            height: 10em;
+            background: #1e1e1e;
+            border-top: 1px solid #333;
+            padding: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .chat-input textarea,
+        .chat-config textarea {
+            flex: 1;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: #d4d4d4;
+            resize: none;
+            padding: 5px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            border-radius: 3px;
+            height: 100%;
+        }
+
+        .chat-input textarea:focus,
+        .chat-config textarea:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        .chat-config label {
+            margin-top: 1em;   
+        }
+
+        .chat-input button {
+            width: 60px;
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            padding:8px 5px ;
+        }
+
+        .chat-input button:hover {
+            background: #0055aa;
+        }
+
+        .chat-input button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+
+        .preview-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+        }
+
+        .preview-content code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        #system-prompt{
+            min-height: 20em;
+        }
+
+        .chat-history-container{
+            max-height: 10em;
+        }
+
+        .chat-history-record {
+            padding: 5px 10px;
+            color: #888888;
+            font-size: 11px;
+            width: 100%;
+            cursor: pointer;
+        }
+        .chat-history-record:hover{
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="panel preview-panel">
+        <div class="panel-header">代码预览
+            <button id="maximizeBtn" class="maximize-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-maximize"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            </button>
+        </div>
+        <div class="preview-content" id="previewContent">
+            <iframe id="previewFrame" sandbox="allow-scripts"></iframe>
+        </div>
+    </div>
+
+    <div class="panel editor-panel">
+        <div class="panel-header">代码编辑<button id="downloadBtn" class="maximize-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button></div>
+        <div id='editor-container' class='editor-content'>
+            <textarea id="editor" placeholder="在此输入 HTML 和 JavaScript 代码..."></textarea>
+        </div>
+    </div>
+
+    <div class="panel chat-panel">
+        <div class="panel-header">AI 对话<button id="configBtn" class="maximize-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button></div>
+        <div id='chat-config' class="chat-config" style='display: none;'>
+            <label>LLM接口地址: </label><input type="text" id="apiUrl" value="http://127.0.0.1:8080/v1/chat/completions" onchange="saveApiUrl()">
+            <label>API KEY: </label><input type="password" id="apiKey" onchange="saveApiKey()">
+            <label>系统提示词: </label><textarea id='system-prompt' onchange="savePrompt()"># Role
+你是一位拥有 10 年以上经验的资深前端开发工程师，精通 HTML5、CSS3、JavaScript (ES6+)，并熟悉响应式设计、无障碍访问（a11y）和现代前端最佳实践。
+
+# Goal
+根据用户的自然语言需求，生成完整、可运行、结构清晰且符合现代标准的 HTML 代码。
+
+# Guidelines
+1. **完整性**：除非用户特别指定，否则请始终返回完整的 HTML 文档结构。
+2. **单文件优先**：除非需求复杂，否则尽量将 CSS 写在 style 标签内，JS 写在 script 标签内，保持代码在一个文件中以便用户直接复制运行。
+3. **现代特性**：
+   - 使用语义化 HTML 标签（如 header, main, footer, article 等），避免滥用 div。
+   - CSS 使用 Flexbox 或 Grid 进行布局，确保响应式设计（Mobile-First）。
+   - 不使用过时属性或过时的框架（除非用户明确要求）。
+4. **严禁使用外部依赖**：
+   - 禁止引入任何外部 CDN 库（如 jQuery, Bootstrap, React 等）。
+   - 必须使用原生 HTML/CSS/JavaScript 实现所有功能。
+5. **严禁使用 localStorage 或 sessionStorage**：
+   - 禁止在任何 JavaScript 代码中使用 `localStorage`、`sessionStorage` 或 `document.cookie`。
+   - 如果需要持久化数据或状态，请使用内存变量（内存中的数组/对象）或在注释中说明“由于限制未实现持久化”。
+   - 如果用户明确要求保存数据，请拒绝使用本地存储，并改用模拟数据或提示用户数据将在刷新后丢失。
+6. **代码质量**：
+   - 代码缩进整齐，变量命名清晰。
+   - 关键逻辑添加简短注释。
+   - 确保代码可直接在浏览器中运行。
+7. **输出格式**：
+   - **只输出代码**，不要包含任何解释性文字、Markdown 代码块标记（如 ```html）以外的额外内容，除非用户明确要求解释。
+   - 如果代码非常长，请确保结构完整，不要截断。
+
+# Exception Handling
+- 如果用户需求模糊，请根据常见最佳实践做出合理假设，并在代码注释中说明假设内容。
+- 如果需求涉及复杂逻辑（如动画、状态管理），请确保代码健壮且易于扩展。
+            </textarea>
+            <label>历史记录</label>
+            <div id='chat-history' class='chat-history-container'></div>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input">
+            <textarea id="userInput" placeholder="输入您的问题..."></textarea>
+            <div style='display: flex;flex-direction: column;gap:10px;'>
+                <button id="sendBtn">发送</button>
+                <button onclick="setExample(`基于 CSS 的 transform-style: preserve-3d 做一个三维太阳系模型，要求如下：
+1. 太阳和所有行星都是三维球体，使用 border-radius: 50% 配合 radial-gradient 径向渐变模拟球体光照效果，光源从左上 30% 方向照射。
+2. 实现拖动切换视角：鼠标拖动时整体场景 rotateX/rotateY 跟随旋转。
+3. 实现滚轮放大缩小：鼠标滚轮控制场景 scale。
+4. 【关键】所有球体必须实现 Billboard 效果：当场景 rotateX/rotateY 旋转时，每个球体自身必须同步应用反向的 rotateX/rotateY，确保球体始终正面朝向观察者，不会因为视角旋转而变成扁平或一条线。
+5. 太阳固定在中心发光，行星围绕太阳公转，公转轨道用 3D 圆环表示。`)">示例1</button>
+                <button onclick="setExample('请设计一个可用箭头键进行操作的贪吃蛇游戏，要求界面美观，配色适当')">示例2</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const previewFrame = document.getElementById('previewFrame');
+        const chatMessages = document.getElementById('chatMessages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const apiUrlInput = document.getElementById('apiUrl');
+        const apiKeyInput = document.getElementById('apiKey');
+        const chatHistoryDiv = document.getElementById('chat-history');
+        const storage = (function () {
+            const DB_NAME = 'OneFileChatIDE';
+            const DB_VERSION = 1;
+            const STORE_NAME = 'storage';
+            let dbInstance = null;
+
+            // 初始化数据库连接
+            function initDB() {
+                if (dbInstance) {
+                    return Promise.resolve(dbInstance);
+                }
+
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                    // 处理数据库首次创建或版本升级
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            // 创建对象存储，keyPath 为 'key'，autoIncrement 为 false
+                            db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+                        }
+                    };
+
+                    request.onsuccess = (event) => {
+                        dbInstance = event.target.result;
+                        resolve(dbInstance);
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('Failed to open IndexedDB: ' + event.target.message));
+                    };
+
+                    request.onsuccess = (event) => {
+                        dbInstance = event.target.result;
+                        resolve(dbInstance);
+                    };
+                });
+            }
+            async function save(key, value) {
+                try {
+                    const db = await initDB();
+                    return new Promise((resolve, reject) => {
+                        const transaction = db.transaction(STORE_NAME, 'readwrite');
+                        const objectStore = transaction.objectStore(STORE_NAME);
+
+                        // 确保 value 是字符串
+                        const stringValue = String(value);
+
+                        const request = objectStore.put({ key: key, value: stringValue });
+
+                        request.onsuccess = () => {
+                            resolve(true);
+                        };
+
+                        request.onerror = (event) => {
+                            reject(new Error('Failed to save data: ' + event.target.error));
+                        };
+                    });
+                } catch (error) {
+                    console.error('Error in storage save :', error);
+                    throw error;
+                }
+            }
+            async function get(key) {
+                try {
+                    const db = await initDB();
+                    return new Promise((resolve, reject) => {
+                        const transaction = db.transaction(STORE_NAME, 'readonly');
+                        const objectStore = transaction.objectStore(STORE_NAME);
+
+                        const request = objectStore.get(key);
+
+                        request.onsuccess = (event) => {
+                            const result = event.target.result;
+                            // 如果 key 存在，返回 value；否则返回 null
+                            if (result) {
+                                resolve(result.value);
+                            } else {
+                                resolve(null);
+                            }
+                        };
+
+                        request.onerror = (event) => {
+                            reject(new Error('Failed to get data: ' + event.target.error));
+                        };
+                    });
+                } catch (error) {
+                    console.error('Error in storage get :', error);
+                    throw error;
+                }
+            }
+            async function list() {
+                const db = await initDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(STORE_NAME, 'readonly');
+                    const objectStore = transaction.objectStore(STORE_NAME);
+
+                    // 使用 getAllKeys() 直接获取所有 key
+                    const request = objectStore.getAll();
+
+                    request.onsuccess = (event) => {
+                        resolve(event.target.result); // 返回 key 数组
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('Failed to get all keys'));
+                    };
+                });
+            }
+
+            return {
+                save,
+                get,
+                list
+            };
+        })();
+        var previousBlobUrl = null;
+        var messageHistory = [];
+        var current_history_uuid = "his-" + create_uuid();
+
+        function create_uuid() {// 生成UUID
+            var d = new Date().getTime();
+            const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = (d + Math.random() * 16) % 16 | 0;
+                d = Math.floor(d / 16);
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+            return uuid;
+        }
+
+        function savePrompt(){// 保存提示词
+            storage.save('cfg-system-prompt',document.getElementById('system-prompt').value);
+        }
+
+        function loadPrompt(){// 加载提示词
+            storage.get('cfg-system-prompt').then(prompt=>{;
+                if(prompt){
+                    document.getElementById('system-prompt').value=prompt;
+                }
+            });
+        }
+
+        function saveApiUrl(){// 保存提示词
+            storage.save('cfg-api-url',document.getElementById('apiUrl').value);
+        }
+
+        function loadApiUrl(){// 加载提示词
+            storage.get('cfg-api-url').then(s=>{;
+                if(s){
+                    document.getElementById('apiUrl').value=s;
+                }
+            });
+        }
+
+        function saveApiKey(){// 保存提示词
+            storage.save('cfg-api-key',document.getElementById('apiKey').value);
+        }
+
+        function loadApiKey(){// 加载提示词
+            storage.get('cfg-api-key').then(s=>{;
+                if(s){
+                    document.getElementById('apiKey').value=s;
+                }
+            });
+        }
+
+        function saveHistory(){// 持久化存储历史记录
+            if(messageHistory.length>0){                
+                storage.save(current_history_uuid,JSON.stringify(messageHistory));
+            }
+        }
+
+        function loadHistory(uuid){// 加载历史记录
+            storage.get(uuid).then((e)=>{
+                if(e!=null){
+                    messageHistory=JSON.parse(e);
+                    current_history_uuid=uuid;
+                    chatMessages.innerHTML='';
+                    var code="";
+                    messageHistory.forEach(s=>{
+                        if(s.role=='user'){
+                            addMessage(s.content,'user')
+                        }else if(s.role=='assistant' && s.content!=""){
+                            addMessage(s.content,'ai')
+                        }
+                        if(s.role=='assistant' && typeof(s.tool_calls)!="undefined" && s.tool_calls.length>0){
+                            if(s.tool_calls[0].function.name=="html_commit"){
+                                code=JSON.parse(s.tool_calls[0].function.arguments).html;
+                            }
+                        }
+                    });
+                    if(code!=""){
+                        editor.value=code;
+                        updatePreview();
+                        toggleChatConfig();
+                    }
+                }
+            })
+        }
+
+        function loadHistoryList(){// 加载历史记录
+            chatHistoryDiv.innerHTML="";
+            storage.list().then((e)=>{
+                if(e!=null){
+                    e.forEach(s=>{
+                        if(s.key.substr(0,4)!="cfg-"){                            
+                            var his=JSON.parse(s.value);
+                            if(his[0].role=='user' && his[0].content!=""){
+                                chatHistoryDiv.innerHTML+=`<div class='chat-history-record' onclick="loadHistory('${s.key}')">${his[0].content.substr(0,10)}...</div>`;    
+                            }   
+                        }
+                    })
+                }
+            })
+        }
+
+        function setExample(s){
+            document.getElementById('userInput').value=s;
+        }
+
+        function updatePreview() {
+            const code = editor.value;
+            
+            if (previousBlobUrl) {
+                URL.revokeObjectURL(previousBlobUrl);
+                previousBlobUrl = null;
+            }
+            
+            const fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' + code + '</body></html>';
+            const blob = new Blob([fullHtml], { type: 'text/html' });
+            const blobUrl = URL.createObjectURL(blob);
+            previousBlobUrl = blobUrl;
+            
+            previewFrame.src = blobUrl;
+        }
+
+        editor.addEventListener('input', updatePreview);
+
+        editor.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                editor.selectionStart = editor.selectionEnd = start + 4;
+                updatePreview();
+            }
+        });
+
+        function addMessage(content, type) {
+            const div = document.createElement('div');
+            div.className = 'chat-message ' + type;
+            const pre = document.createElement('pre');
+            pre.textContent = content;
+            div.appendChild(pre);
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function createMessageElement(content, type) {
+            const div = document.createElement('div');
+            div.className = 'chat-message ' + type;
+            const pre = document.createElement('pre');
+            pre.textContent = content;
+            div.appendChild(pre);
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return div;
+        }
+
+        function createLoadingElement() {
+            const div = document.createElement('div');
+            div.className = 'chat-message ai loading';
+
+            const pre = document.createElement('pre');
+
+            const spinner = document.createElement('span');
+            spinner.className = 'loading-spinner';
+
+            const tokenSpan = document.createElement('span');
+            tokenSpan.className = 'token-count';
+            tokenSpan.textContent = '';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'message-text';
+
+            pre.appendChild(spinner);
+            pre.appendChild(tokenSpan);
+            pre.appendChild(textSpan);
+            div.appendChild(pre);
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return div;
+        }
+
+        function updateLastMessage(content) {
+            const messages = chatMessages.querySelectorAll('.chat-message');
+            if (messages.length > 0) {
+                messages[messages.length - 1].textContent = content;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function downloadCode() {
+            const code = editor.value;
+            const blob = new Blob([code], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'demo.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function toggleChatConfig() {
+            const chatConfig = document.getElementById('chat-config');
+            if(chatConfig.style.display=='none'){
+                chatConfig.style.display='flex';
+            }else{
+                chatConfig.style.display='none';
+            }
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            const apiUrl = apiUrlInput.value.trim();
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!apiUrl) {
+                addMessage('请先配置 API 地址', 'error');
+                return;
+            }
+
+            addMessage(message, 'user');
+            userInput.value = '';
+            sendBtn.disabled = true;
+
+            const contextCode = editor.value;
+            const configSystemPrompt = document.getElementById('system-prompt').value;
+            const systemPrompt = configSystemPrompt;
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (apiKey) {
+                headers['Authorization'] = 'Bearer ' + apiKey;
+            }
+
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content:`创建或修改HTML页面时，必须调用 html_commit 工具
+
+## 核心指令
+- 如果用户请求创建页面、修改页面、实现功能、写代码，请立即使用 html_commit 工具，不允许在对话中输出任何代码。
+- 如果用户只是提问、寻求解释或讨论，直接回答即可，不需要调用工具。
+
+## 绝对规则
+1. 禁止在content字段中输出完整的HTML代码
+2. 禁止使用markdown代码块输出完整页面代码
+3. 代码必须通过工具调用提交
+`},
+                { role: 'system', content: '好的，我将严格遵循您的核心指令和绝对规则。' }
+            ];
+
+            messages.push.apply(messages, messageHistory);
+
+            if(contextCode.trim()!=""){                
+                messages.push.apply(messages, [
+                    { role: 'user', content: `我的最新代码如下：\n\`\`\`html${contextCode}\`\`\`` },
+                    { role: 'system', content: "收到，好的" }
+                ]);   
+            }
+            messages.push({ role: 'user', content: message });
+            messageHistory.push({ role: 'user', content: message });
+
+
+            try {
+                document.getElementById('chat-config').style.display='none';
+                await streamAIResponse(messages, headers);
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : '未知错误';
+                addMessage('请求失败: ' + errorMsg, 'error');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function streamAIResponse(messages, headers, existingMessageEl) {
+            const aiMessageEl = existingMessageEl || createLoadingElement();
+            let fullContent = '';
+            let tokenCount = 0;
+            let toolCalls = null;
+            let hasToolCall = false;
+
+            function updateTokenCount() {
+                const tokenSpan = aiMessageEl.querySelector('.token-count');
+                if (tokenSpan) {
+                    tokenSpan.textContent = tokenCount ;
+                }
+            }
+
+            const response = await fetch(apiUrlInput.value.trim(), {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    userid: 'test',
+                    model: 'momodo',
+                    stream: true,
+                    temperature: 0.95,
+                    chat_template_kwargs: {
+                        enable_thinking: false
+                    },
+                    messages: messages,
+                    tools: [{
+                        "type": "function",
+                        "function": {
+                            "name": "html_commit",
+                            "description": "提交html代码",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "html": {
+                                        "type": "string",
+                                        "description": "html代码内容"
+                                    }
+                                },
+                                "required": ["html"]
+                            }
+                        }
+                    }],
+                    tool_choice: "auto"
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('请求失败: ' + response.status);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line || line === 'data: [DONE]') continue;
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(line.substring(6));
+                            if (json.usage && json.usage.completion_tokens) {
+                                tokenCount = json.usage.completion_tokens;
+                                updateTokenCount();
+                            }
+                            const delta = json.choices?.[0]?.delta;
+                            if (delta) {
+                                if (delta.content) {
+                                    fullContent += delta.content;
+                                    tokenCount += delta.content.length;
+                                    updateTokenCount();
+                                    const textSpan = aiMessageEl.querySelector('.message-text');
+                                    if (textSpan) {
+                                        textSpan.textContent = fullContent;
+                                    }
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                }
+                                if (delta.tool_calls) {
+                                    hasToolCall = true;
+                                    if (!toolCalls) {
+                                        toolCalls = [];
+                                    }
+                                    delta.tool_calls.forEach((tc, idx) => {
+                                        if (!toolCalls[idx]) {
+                                            toolCalls[idx] = {
+                                                id: tc.id,
+                                                type: tc.type,
+                                                function: {
+                                                    name: tc.function.name,
+                                                    arguments: ''
+                                                }
+                                            };
+                                        }
+                                        if (tc.function.arguments) {
+                                            toolCalls[idx].function.arguments += tc.function.arguments;
+                                            tokenCount += tc.function.arguments.length;
+                                            updateTokenCount();
+                                            try{
+                                                const args=JSON.parse(toolCalls[idx].function.arguments+'"}');
+                                                editor.value = args.html;
+                                            } catch (e){
+                                                // ignore parse 
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            // ignore parse error
+                        }
+                    }
+                }
+            }
+
+            if (hasToolCall && toolCalls) {
+                messageHistory.push({ role: 'assistant', content: fullContent, tool_calls: toolCalls });
+
+                for (const toolCall of toolCalls) {
+                    if (toolCall.function.name === 'html_commit') {
+                        try {
+                            const args = JSON.parse(toolCall.function.arguments);
+                            if (args.html) {
+                                editor.value = args.html;
+                                updatePreview();
+
+                                messageHistory.push({
+                                    role: 'tool',
+                                    tool_call_id: toolCall.id,
+                                    content: 'HTML代码已成功提交到编辑器'
+                                });
+
+                                await streamAIResponse(messageHistory, headers, aiMessageEl);
+                                saveHistory();
+                                loadingCompleted(aiMessageEl);
+                                return;
+                            }
+                        } catch (e) {
+                            aiMessageEl.textContent = '解析工具调用参数失败: ' + e.message;
+                        }
+                    }
+                }
+            } else {
+                messageHistory.push({ role: 'assistant', content: fullContent });
+            }
+            saveHistory();
+            loadingCompleted(aiMessageEl);
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+
+        const downloadBtn = document.getElementById('downloadBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', downloadCode);
+        }
+
+        const configBtn = document.getElementById('configBtn');
+        if (configBtn) {
+            configBtn.addEventListener('click', toggleChatConfig);
+        }
+
+        const maximizeBtn = document.getElementById('maximizeBtn');
+        const previewPanel = document.querySelector('.preview-panel');
+        const editorPanel = document.querySelector('.editor-panel');
+        const chatPanel = document.querySelector('.chat-panel');
+        let isFullscreen = false;
+
+        function toggleFullscreen() {
+            if (!previewPanel || !editorPanel || !chatPanel) return;
+
+            isFullscreen = !isFullscreen;
+
+            if (isFullscreen) {
+                previewPanel.style.width = '70%';
+                editorPanel.style.display = 'none';
+            } else {
+                previewPanel.style.width = '30%';
+                editorPanel.style.display = 'flex';
+            }
+
+            updateMaximizeIcon();
+        }
+
+        function loadingCompleted(aiMessageEl){
+            const spinner = aiMessageEl.querySelector('.loading-spinner');
+            if (spinner) {
+                spinner.classList.add('completed');
+            }
+            aiMessageEl.classList.remove('loading');
+        }
+
+        function updateMaximizeIcon() {
+            if (!maximizeBtn) return;
+            const svg = maximizeBtn.querySelector('svg');
+            if (svg) {
+                if (isFullscreen) {
+                    svg.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>';
+                } else {
+                    svg.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>';
+                }
+            }
+        }
+
+        if (maximizeBtn) {
+            maximizeBtn.addEventListener('click', toggleFullscreen);
+        }
+
+        userInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function codeColorfull(container_id, codeinput_id) {
+            const container = document.getElementById(container_id);
+            const codeInput = document.getElementById(codeinput_id);
+            if (!container || !codeInput) return;
+
+            // 插入样式
+            const styleEl = document.createElement('style');
+            styleEl.textContent = `
+                .ce-editor-wrapper {
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                    font-size: 14px;
+                    line-height: 1.6;
+                }
+
+                .ce-textarea {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    padding: 10px;
+                    background: transparent;
+                    color: transparent;
+                    caret-color: #fff;
+                    border: none;
+                    outline: none;
+                    resize: none;
+                    font-family: inherit;
+                    font-size: inherit;
+                    line-height: inherit;
+                    tab-size: 4;
+                    z-index: 1;
+                }
+
+                .ce-highlight-layer {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    padding: 10px;
+                    background: #1e1e1e;
+                    color: #ccc;
+                    pointer-events: none;
+                    overflow: auto;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                    font-family: inherit;
+                    font-size: inherit;
+                    line-height: inherit;
+                }
+
+                .ce-hl-tag {
+                    color: #ff79c6;
+                }
+
+                .ce-hl-name {
+                    color: #ff79c6;
+                }
+
+                .ce-hl-attr {
+                    color: #bd93f9;
+                }
+
+                .ce-hl-string {
+                    color: #f1fa8c;
+                }
+
+                .ce-hl-comment {
+                    color: #6272a4;
+                    font-style: italic;
+                }
+
+                .ce-hl-keyword {
+                    color: #ff79c6;
+                }
+
+                .ce-hl-built_in {
+                    color: #8be9fd;
+                }
+
+                .ce-hl-title-function {
+                    color: #50fa7b;
+                }
+
+                .ce-hl-number {
+                    color: #bd93f9;
+                }
+
+                .ce-hl-selector-tag {
+                    color: #ff79c6;
+                }
+
+                .ce-hl-selector-class {
+                    color: #50fa7b;
+                }
+
+                .ce-hl-selector-id {
+                    color: #bd93f9;
+                }
+
+                .ce-hl-attribute {
+                    color: #8be9fd;
+                }
+            `;
+            document.head.appendChild(styleEl);
+
+            // 创建包装层
+            const wrapper = document.createElement('div');
+            wrapper.className = 'ce-editor-wrapper';
+
+            // 创建高亮层
+            const highlightLayer = document.createElement('div');
+            highlightLayer.className = 'ce-highlight-layer';
+
+            // 将 textarea 移动到 wrapper 中，并应用样式
+            codeInput.className = 'ce-textarea';
+            codeInput.setAttribute('spellcheck', 'false');
+            codeInput.setAttribute('autocorrect', 'off');
+            codeInput.setAttribute('autocapitalize', 'off');
+            codeInput.setAttribute('data-ms-editor', 'true');
+            
+            wrapper.appendChild(highlightLayer);
+            wrapper.appendChild(codeInput);
+            container.appendChild(wrapper);
+
+            function escapeHtml(text) {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+
+            function highlightMixed(code) {
+                let result = '';
+                let i = 0;
+                let context = 'html';
+
+                while (i < code.length) {
+                    let matched = false;
+
+                    if (context === 'html') {
+                        if (code.slice(i).startsWith('<!--')) {
+                            const end = code.indexOf('-->', i);
+                            const comment = end === -1 ? code.slice(i) : code.slice(i, end + 3);
+                            result += '<span class="ce-hl-comment">' + escapeHtml(comment) + '</span>';
+                            i += comment.length;
+                            matched = true;
+                        } else if (code[i] === '<') {
+                            const end = code.indexOf('>', i);
+                            if (end !== -1) {
+                                const tag = code.slice(i, end + 1);
+                                const tagContent = tag.slice(1, -1).toLowerCase();
+
+                                if (tagContent.startsWith('style')) {
+                                    result += '<span class="ce-hl-tag">&lt;' + tagContent + '&gt;</span>';
+                                    i += tag.length;
+                                    context = 'css';
+                                    matched = true;
+                                } else if (tagContent.startsWith('script')) {
+                                    result += '<span class="ce-hl-tag">&lt;' + tagContent + '&gt;</span>';
+                                    i += tag.length;
+                                    context = 'javascript';
+                                    matched = true;
+                                } else {
+                                    result += highlightHTMLTag(tag);
+                                    i += tag.length;
+                                    matched = true;
+                                }
+                            }
+                        }
+                    } else if (context === 'css') {
+                        if (code.slice(i).startsWith('</style')) {
+                            const end = code.indexOf('>', i);
+                            const tag = end !== -1 ? code.slice(i, end + 1) : code.slice(i);
+                            result += '<span class="ce-hl-tag">' + escapeHtml(tag) + '</span>';
+                            i += tag.length;
+                            context = 'html';
+                            matched = true;
+                        } else {
+                            const cssEnd = Math.min(
+                                code.indexOf('</style', i) === -1 ? code.length : code.indexOf('</style', i),
+                                code.length
+                            );
+                            const cssCode = code.slice(i, cssEnd);
+                            result += highlightCSSBlock(cssCode);
+                            i += cssCode.length;
+                            matched = true;
+                        }
+                    } else if (context === 'javascript') {
+                        if (code.slice(i).startsWith('</script')) {
+                            const end = code.indexOf('>', i);
+                            const tag = end !== -1 ? code.slice(i, end + 1) : code.slice(i);
+                            result += '<span class="ce-hl-tag">' + escapeHtml(tag) + '</span>';
+                            i += tag.length;
+                            context = 'html';
+                            matched = true;
+                        } else {
+                            const jsEnd = Math.min(
+                                code.indexOf('</script', i) === -1 ? code.length : code.indexOf('</script', i),
+                                code.length
+                            );
+                            const jsCode = code.slice(i, jsEnd);
+                            result += highlightJSBlock(jsCode);
+                            i += jsCode.length;
+                            matched = true;
+                        }
+                    }
+
+                    if (!matched) {
+                        result += escapeHtml(code[i]);
+                        i++;
+                    }
+                }
+
+                return result;
+            }
+
+            function highlightHTMLTag(tag) {
+                const tagContent = tag.slice(1, -1);
+                let processed = '&lt;';
+
+                const tagMatch = tagContent.match(/^(\/?)([a-zA-Z][\w-]*)/);
+                if (tagMatch) {
+                    processed += tagMatch[1] + '<span class="ce-hl-name">' + tagMatch[2] + '</span>';
+                    const attrs = tagContent.slice(tagMatch[0].length);
+                    let processedAttrs = '';
+                    let attrI = 0;
+                    while (attrI < attrs.length) {
+                        if (attrs[attrI].match(/\s/)) {
+                            processedAttrs += attrs[attrI];
+                            attrI++;
+                        } else if (/^[a-zA-Z][\w-]*/.test(attrs.slice(attrI))) {
+                            const attrName = attrs.slice(attrI).match(/^[a-zA-Z][\w-]*/)[0];
+                            processedAttrs += '<span class="ce-hl-attr">' + attrName + '</span>';
+                            attrI += attrName.length;
+                        } else if (attrs[attrI] === '=') {
+                            processedAttrs += '=';
+                            attrI++;
+                        } else if (attrs[attrI] === '"' || attrs[attrI] === "'") {
+                            const quote = attrs[attrI];
+                            let j = attrI + 1;
+                            while (j < attrs.length && attrs[j] !== quote) {
+                                j++;
+                            }
+                            const value = attrs.slice(attrI, j + 1);
+                            processedAttrs += '<span class="ce-hl-string">' + escapeHtml(value) + '</span>';
+                            attrI = j + 1;
+                        } else {
+                            processedAttrs += attrs[attrI];
+                            attrI++;
+                        }
+                    }
+                    processed += processedAttrs;
+                } else {
+                    processed += escapeHtml(tagContent);
+                }
+                processed += '&gt;';
+                return '<span class="ce-hl-tag">' + processed + '</span>';
+            }
+
+            function highlightCSSBlock(code) {
+                let result = '';
+                let i = 0;
+
+                while (i < code.length) {
+                    let matched = false;
+
+                    if (code.slice(i).startsWith('/*')) {
+                        const end = code.indexOf('*/', i);
+                        const comment = end === -1 ? code.slice(i) : code.slice(i, end + 2);
+                        result += '<span class="ce-hl-comment">' + escapeHtml(comment) + '</span>';
+                        i += comment.length;
+                        matched = true;
+                    } else if (code[i] === '@') {
+                        let j = i + 1;
+                        while (j < code.length && /[\w-]/.test(code[j])) {
+                            j++;
+                        }
+                        const atRule = code.slice(i, j);
+                        result += '@<span class="ce-hl-keyword">' + atRule.slice(1) + '</span>';
+                        i = j;
+                        matched = true;
+                    } else if (code[i] === '.' && i + 1 < code.length && /[a-zA-Z_]/.test(code[i + 1])) {
+                        let j = i + 1;
+                        while (j < code.length && /[\w-]/.test(code[j])) {
+                            j++;
+                        }
+                        const className = code.slice(i, j);
+                        result += '<span class="ce-hl-selector-class">' + className + '</span>';
+                        i = j;
+                        matched = true;
+                    } else if (code[i] === '#' && i + 1 < code.length && /[a-zA-Z_]/.test(code[i + 1])) {
+                        let j = i + 1;
+                        while (j < code.length && /[\w-]/.test(code[j])) {
+                            j++;
+                        }
+                        const idName = code.slice(i, j);
+                        result += '<span class="ce-hl-selector-id">' + idName + '</span>';
+                        i = j;
+                        matched = true;
+                    } else if (/^[a-zA-Z-]/.test(code[i])) {
+                        let j = i;
+                        while (j < code.length && /[\w-]/.test(code[j])) {
+                            j++;
+                        }
+                        const word = code.slice(i, j);
+                        if (j < code.length && code[j] === ':') {
+                            result += '<span class="ce-hl-attribute">' + word + '</span>';
+                        } else {
+                            result += '<span class="ce-hl-selector-tag">' + word + '</span>';
+                        }
+                        i = j;
+                        matched = true;
+                    } else if (/^\d/.test(code[i]) || code[i] === '-') {
+                        let j = i;
+                        while (j < code.length && /[\d.pxrem%]/.test(code[j].toLowerCase())) {
+                            j++;
+                        }
+                        const value = code.slice(i, j);
+                        result += '<span class="ce-hl-string">' + value + '</span>';
+                        i = j;
+                        matched = true;
+                    } else if (code[i] === '"' || code[i] === "'") {
+                        const quote = code[i];
+                        let j = i + 1;
+                        while (j < code.length && code[j] !== quote) {
+                            j++;
+                        }
+                        const str = code.slice(i, j + 1);
+                        result += '<span class="ce-hl-string">' + escapeHtml(str) + '</span>';
+                        i = j + 1;
+                        matched = true;
+                    }
+
+                    if (!matched) {
+                        result += escapeHtml(code[i]);
+                        i++;
+                    }
+                }
+
+                return result;
+            }
+
+            function highlightJSBlock(code) {
+                const keywords = ['var', 'let', 'const', 'function', 'return', 'if', 'else',
+                    'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'class',
+                    'extends', 'new', 'this', 'typeof', 'instanceof', 'try', 'catch', 'throw',
+                    'async', 'await', 'import', 'export', 'default', 'from', 'of', 'in', 'with'
+                ];
+
+                const builtins = ['console', 'document', 'window', 'Array', 'Object',
+                    'String', 'Number', 'Boolean', 'Function', 'Promise', 'Map', 'Set',
+                    'JSON', 'Math', 'Date', 'parseInt', 'parseFloat', 'isNaN', 'isFinite'
+                ];
+
+                let result = '';
+                let i = 0;
+
+                while (i < code.length) {
+                    let matched = false;
+
+                    if (code.slice(i).startsWith('//')) {
+                        const end = code.indexOf('\n', i);
+                        const comment = end === -1 ? code.slice(i) : code.slice(i, end);
+                        result += '<span class="ce-hl-comment">' + escapeHtml(comment) + '</span>';
+                        i += comment.length;
+                        matched = true;
+                    } else if (code.slice(i).startsWith('/*')) {
+                        const end = code.indexOf('*/', i);
+                        const comment = end === -1 ? code.slice(i) : code.slice(i, end + 2);
+                        result += '<span class="ce-hl-comment">' + escapeHtml(comment) + '</span>';
+                        i += comment.length;
+                        matched = true;
+                    } else if (code[i] === '"' || code[i] === "'" || code[i] === '`') {
+                        const quote = code[i];
+                        let j = i + 1;
+                        while (j < code.length && (code[j] !== quote || code[j - 1] === '\\')) {
+                            j++;
+                        }
+                        const str = code.slice(i, j + 1);
+                        result += '<span class="ce-hl-string">' + escapeHtml(str) + '</span>';
+                        i += str.length;
+                        matched = true;
+                    } else if (/^\d/.test(code[i])) {
+                        let j = i;
+                        while (j < code.length && /[\d.]/.test(code[j])) {
+                            j++;
+                        }
+                        const num = code.slice(i, j);
+                        result += '<span class="ce-hl-number">' + num + '</span>';
+                        i += num.length;
+                        matched = true;
+                    } else if (/^[a-zA-Z_$]/.test(code[i])) {
+                        let j = i;
+                        while (j < code.length && /[\w$]/.test(code[j])) {
+                            j++;
+                        }
+                        const word = code.slice(i, j);
+                        let processed = word;
+
+                        if (keywords.includes(word)) {
+                            processed = '<span class="ce-hl-keyword">' + word + '</span>';
+                        } else if (builtins.includes(word)) {
+                            processed = '<span class="ce-hl-built_in">' + word + '</span>';
+                        } else if (j < code.length && code[j] === '(') {
+                            processed = '<span class="ce-hl-title-function">' + word + '</span>';
+                        }
+
+                        result += processed;
+                        i += word.length;
+                        matched = true;
+                    }
+
+                    if (!matched) {
+                        result += escapeHtml(code[i]);
+                        i++;
+                    }
+                }
+
+                return result;
+            }
+
+            function updateHighlight() {
+                const code = codeInput.value;
+                const highlighted = highlightMixed(code);
+                highlightLayer.innerHTML = highlighted;
+
+                highlightLayer.scrollTop = codeInput.scrollTop;
+                highlightLayer.scrollLeft = codeInput.scrollLeft;
+            }
+
+            codeInput.addEventListener('input', updateHighlight);
+            codeInput.addEventListener('scroll', () => {
+                highlightLayer.scrollTop = codeInput.scrollTop;
+                highlightLayer.scrollLeft = codeInput.scrollLeft;
+            });
+
+            // 轮询检测值变化（处理直接通过 DOM API 修改值的情况）
+            let lastValue = codeInput.value;
+            setInterval(() => {
+                if (codeInput.value !== lastValue) {
+                    lastValue = codeInput.value;
+                    updateHighlight();
+                }
+            }, 100);
+
+            return {
+                getCode: () => codeInput.value,
+                setCode: (code) => {
+                    codeInput.value = code;
+                    updateHighlight();
+                },
+                update: updateHighlight
+            };
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePreview();
+            loadApiUrl();
+            loadApiKey();
+            loadPrompt();
+            loadHistoryList();
+            window.codeColorfullInstance = codeColorfull('editor-container', 'editor');
+        });
+    </script>
+</body>
+</html>
