@@ -87,7 +87,7 @@
 
         .chat-config label {
             color: #888;
-            font-size: 11px;
+            font-size: 12px;
             display: flex;
             align-items: center;
         }
@@ -207,6 +207,26 @@
             height: 18px;
         }
 
+        .remove-history-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+            color:white;
+            width: 14px;
+            height: 14px;
+        }
+
+        .remove-history-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .remove-history-btn svg{
+            width: 14px;
+            height: 14px;
+        }
+
         .chat-message.user {
             background: #0066cc;
             color: #fff;
@@ -295,18 +315,25 @@
         }
 
         .chat-history-container{
+            overflow-y: scroll;
             max-height: 10em;
+            width: 100%;
         }
 
         .chat-history-record {
+            margin-bottom: 5px;
             padding: 5px 10px;
             color: #888888;
-            font-size: 11px;
+            font-size: 12px;
             width: 100%;
             cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px dashed rgba(0,0,0,0);
         }
         .chat-history-record:hover{
-            text-decoration: underline;
+            border-bottom: 1px dashed #888888;
         }
 
     </style>
@@ -332,7 +359,7 @@
     <div class="panel chat-panel">
         <div class="panel-header">AI 对话<button id="configBtn" class="maximize-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button></div>
         <div id='chat-config' class="chat-config" style='display: none;'>
-            <label>LLM接口地址: </label><input type="text" id="apiUrl" value="http://127.0.0.1:8080/v1/chat/completions" onchange="saveApiUrl()">
+            <label>LLM接口地址: </label><input type="text" id="apiUrl" value="http://127.0.0.1/v1/chat/completions" onchange="saveApiUrl()">
             <label>API KEY: </label><input type="password" id="apiKey" value="" onchange="saveApiKey()">
             <label>Model: </label><input type="text" id="apiModel" value="qwen3.6-35b" onchange="saveApiModel()">
             <label>系统提示词: </label><textarea id='system-prompt' onchange="savePrompt()"># Role
@@ -455,6 +482,28 @@
                     throw error;
                 }
             }
+            async function del(key) {
+                try {
+                    const db = await initDB();
+                    return new Promise((resolve, reject) => {
+                        const transaction = db.transaction(STORE_NAME, 'readwrite');
+                        const objectStore = transaction.objectStore(STORE_NAME);
+
+                        const request = objectStore.delete(key);
+
+                        request.onsuccess = () => {
+                            resolve(true);
+                        };
+
+                        request.onerror = (event) => {
+                            reject(new Error('Failed to delete key: ' + event.target.error));
+                        };
+                    });
+                } catch (error) {
+                    console.error('Error in storage delete :', error);
+                    throw error;
+                }
+            }
             async function get(key) {
                 try {
                     const db = await initDB();
@@ -502,6 +551,7 @@
 
             return {
                 save,
+                del,
                 get,
                 list
             };
@@ -602,6 +652,14 @@
             })
         }
 
+        function removeHistory(uuid){              
+            storage.del(uuid).then((e)=>{
+                if(e!=null){
+                    loadHistoryList();
+                }
+            })
+        }
+
         function loadHistoryList(){
             chatHistoryDiv.innerHTML="";
             storage.list().then((e)=>{
@@ -610,7 +668,7 @@
                         if(s.key.substr(0,4)!="cfg-"){                            
                             var his=JSON.parse(s.value);
                             if(his[0].role=='user' && his[0].content!=""){
-                                chatHistoryDiv.innerHTML+=`<div class='chat-history-record' onclick="loadHistory('${s.key}')">${his[0].content.substr(0,10)}...</div>`;    
+                                chatHistoryDiv.innerHTML+=`<div class='chat-history-record'><span onclick="loadHistory('${s.key}')">${his[0].content.substr(0,10)}...</span><button class="remove-history-btn" onclick="removeHistory('${s.key}')"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></div>`;    
                             }   
                         }
                     })
