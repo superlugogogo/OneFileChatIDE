@@ -362,6 +362,7 @@
             <label>LLM接口地址: </label><input type="text" id="apiUrl" value="http://127.0.0.1/v1/chat/completions" onchange="saveApiUrl()">
             <label>API KEY: </label><input type="password" id="apiKey" value="" onchange="saveApiKey()">
             <label>Model: </label><input type="text" id="apiModel" value="qwen3.6-35b" onchange="saveApiModel()">
+            <label>重试次数: </label><input type="number" id="retryNum" value="10" min="0" max="20" onchange="saveRetryNum()">
             <label>系统提示词: </label><textarea id='system-prompt' onchange="savePrompt()"># Role
 你是一位拥有 10 年以上经验的资深前端开发工程师，精通 HTML5、CSS3、JavaScript (ES6+)，并熟悉响应式设计、无障碍访问（a11y）和现代前端最佳实践。
 
@@ -421,6 +422,7 @@
         const sendBtn = document.getElementById('sendBtn');
         const apiUrlInput = document.getElementById('apiUrl');
         const apiKeyInput = document.getElementById('apiKey');
+        const retryNumInput = document.getElementById('retryNum');
         const chatHistoryDiv = document.getElementById('chat-history');
         const storage = (function () {
             const DB_NAME = 'OneFileChatIDE';
@@ -618,6 +620,18 @@
             });
         }
 
+        function saveRetryNum(){
+            storage.save('cfg-retry-num',document.getElementById('retryNum').value);
+        }
+
+        function loadRetryNum(){
+            storage.get('cfg-retry-num').then(s=>{;
+                if(s){
+                    document.getElementById('retryNum').value=s;
+                }
+            });
+        }
+
         function saveHistory(){
             if(messageHistory.length>0){                
                 storage.save(current_history_uuid,JSON.stringify(messageHistory));
@@ -786,11 +800,13 @@
         }
 
         async function sendMessage() {
+            var rt={"ok":false,"error":"unstart"};
             const message = userInput.value.trim();
             if (!message) return;
 
             const apiUrl = apiUrlInput.value.trim();
             const apiKey = apiKeyInput.value.trim();
+            const retryNum = retryNumInput.value*1;
 
             if (!apiUrl) {
                 addMessage('请先配置 API 地址', 'error');
@@ -806,7 +822,8 @@
             const systemPrompt = configSystemPrompt;
 
             const headers = {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
             };
             if (apiKey) {
                 headers['Authorization'] = 'Bearer ' + apiKey;
@@ -842,7 +859,15 @@
 
             try {
                 document.getElementById('chat-config').style.display='none';
-                await streamAIResponse(messages, headers);
+                for(k=0;k<retryNum;k++){// 最大重复10次
+                    if(!rt.ok){
+                        if(typeof(rt.el)!="undefined"){
+                            rt = await streamAIResponse(messages, headers, rt.el);    
+                        }else{
+                            rt = await streamAIResponse(messages, headers);
+                        }
+                    }
+                }
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : '未知错误';
                 addMessage('请求失败: ' + errorMsg, 'error');
@@ -894,7 +919,10 @@
                             }
                         }
                     }],
-                    tool_choice: "auto"
+                    tool_choice: "auto",
+                    max_tokens: 16384,
+                    temperature: 1.00,
+                    top_p: 1.00
                 })
             });
 
@@ -904,17 +932,22 @@
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-
+            var finished=false;
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done || finished) break;
 
                 const chunk = decoder.decode(value, { stream: true });
                 const lines = chunk.split('\n');
-
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i].trim();
-                    if (!line || line === 'data: [DONE]') continue;
+                    if (!line) {
+                        continue;
+                    }
+                    if (line === 'data: [DONE]') {
+                        finished=true;
+                        break;
+                    }
                     if (line.startsWith('data: ')) {
                         try {
                             const json = JSON.parse(line.substring(6));
@@ -933,6 +966,10 @@
                                         textSpan.textContent = fullContent;
                                     }
                                     chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    if(fullContent.indexOf("<html")>-1 || fullContent.indexOf("\`\`\`html")>-1){
+                                        textSpan.textContent="";
+                                        return({"ok":false,"error":"html code output","el":aiMessageEl});
+                                    }
                                 }
                                 if (delta.tool_calls) {
                                     hasToolCall = true;
@@ -940,8 +977,8 @@
                                         toolCalls = [];
                                     }
                                     delta.tool_calls.forEach((tc, idx) => {
-                                        if (!toolCalls[idx]) {
-                                            toolCalls[idx] = {
+                                        if (!toolCalls[tc.index]) {
+                                            toolCalls[tc.index] = {
                                                 id: tc.id,
                                                 type: tc.type,
                                                 function: {
@@ -951,12 +988,13 @@
                                             };
                                         }
                                         if (tc.function.arguments) {
-                                            toolCalls[idx].function.arguments += tc.function.arguments;
+                                            toolCalls[tc.index].function.arguments += tc.function.arguments;
                                             tokenCount += tc.function.arguments.length;
                                             updateTokenCount();
                                             try{
-                                                const args=JSON.parse(toolCalls[idx].function.arguments+'"}');
+                                                const args=JSON.parse(toolCalls[tc.index].function.arguments+'"}');
                                                 editor.value = args.html;
+                                                
                                             } catch (e){
                                                 // ignore parse 
                                             }
@@ -991,7 +1029,7 @@
                                 await streamAIResponse(messageHistory, headers, aiMessageEl);
                                 saveHistory();
                                 loadingCompleted(aiMessageEl);
-                                return;
+                                return({"ok":true,"error":"","el":aiMessageEl});
                             }
                         } catch (e) {
                             aiMessageEl.textContent = '解析工具调用参数失败: ' + e.message;
@@ -1003,6 +1041,7 @@
             }
             saveHistory();
             loadingCompleted(aiMessageEl);
+            return({"ok":true,"error":"","el":aiMessageEl});
         }
 
         sendBtn.addEventListener('click', sendMessage);
